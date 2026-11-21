@@ -22,6 +22,9 @@ if "current_page" not in st.session_state:
 if "active_track" not in st.session_state:
     st.session_state.active_track = None
 
+if "recommended_song" not in st.session_state:
+    st.session_state.recommended_song = None
+
 PAGE_SIZE = 10
 
 def add_song(song_dict):
@@ -33,9 +36,14 @@ def remove_song(track_id):
         s for s in st.session_state.selected_songs if s["track_id"] != track_id
     ]
 
-st.title("Spotify Recommender 🎵")
+def recommend_song(song_dict):
+    st.session_state.recommended_song = song_dict
 
-col1, col2 = st.columns(2)
+st.title("Spotify Recommender 🎵",text_alignment="center")
+
+st.divider()
+
+col1, col2, col3 = st.columns(3)
 
 with col1:
     st.subheader("🔍 Song Search")
@@ -61,6 +69,8 @@ with col1:
     for _, row in page_tracks.iterrows():
         r_play, r_info, r_add = st.columns([0.8,5,1])
 
+        is_already_added = any(s["track_id"] == row["track_id"] for s in st.session_state.selected_songs)
+
         with r_play:
             is_playing = (st.session_state.active_track == row["track_id"])
             play_icon = "🔊" if is_playing else "▶️"
@@ -70,7 +80,7 @@ with col1:
         with r_info:
             st.write(f"**{row['track_name']}** - *{row['artists']}*")
         with r_add:
-            if st.button("➕", key=f"add_{row['track_id']}"):
+            if st.button("➕" if not is_already_added else "✅",disabled=is_already_added,key=f"add_{row['track_id']}"):
                 add_song({
                     "track_id": row["track_id"],
                     "track_name": row["track_name"],
@@ -93,6 +103,55 @@ with col1:
             st.rerun()
 
 with col2:
+    st.subheader("Recommendation",text_alignment="center")
+
+    mincol1 ,mincol2 ,mincol3 = st.columns([1,1,1])
+
+    with mincol2:
+        if st.button("New Recommend"):
+            if not st.session_state.selected_songs:
+                st.warning("You must select at least one song. You can select the songs from the list on left side.")
+            else:
+                selected_ids = [s["track_id"] for s in st.session_state.selected_songs]
+                available_df = df[~df["track_id"].isin(selected_ids)]
+                recommended_song = available_df.sample(n=1).iloc[0]
+
+                recommend_song({"track_id":recommended_song["track_id"],"track_name": recommended_song["track_name"],"artists": recommended_song["artists"],"track_genre": recommended_song["track_genre"]})
+                st.rerun()
+
+    if st.session_state.recommended_song:
+        rec = st.session_state.recommended_song
+        with st.container(border=True):
+            st.write(f"**{rec['track_name']}**")
+            st.write(f"**{rec['artists']}**")
+            st.caption(f"Genre: {rec['track_genre']}")
+
+            minplay ,minadd = st.columns([1,1])
+
+            is_already_added = any(s["track_id"] == rec["track_id"] for s in st.session_state.selected_songs)
+
+            with minplay:
+                is_playing = (st.session_state.active_track == rec["track_id"])
+                play_icon = "🔊" if is_playing else "▶️"
+                if st.button(play_icon, key=f"play_middle_{rec['track_id']}"):
+                    st.session_state.active_track = rec["track_id"]
+                    st.rerun()
+
+            with minadd:
+                if st.button("➕" if not is_already_added else "✅", disabled=is_already_added,
+                             key=f"add_{rec['track_id']}"):
+                    add_song({
+                        "track_id": rec["track_id"],
+                        "track_name": rec["track_name"],
+                        "artists": rec["artists"],
+                        "track_genre": rec["track_genre"],
+                    })
+                    st.rerun()
+
+
+
+
+with col3:
     st.subheader("📋 Selected Songs")
 
     if not st.session_state.selected_songs:
